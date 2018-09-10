@@ -1,3 +1,23 @@
+About this fork
+=================
+This fork enables editing key bindings for terminal application. 
+After the first start of emulator, configuration file will be created at the path "~/.config/xfce/terminal/keybindings.conf".
+In this file you can edit bindings as it comfortable for you.
+
+For example:
+[keybindings]
+prev-tab=<shift>Left
+next-tab=<shift>Right
+move-tab-left=<control><shift>Left
+move-tab-right=<control><shift>Right
+
+If you want disable some keybinding. Pass it as null:
+[keybindings]
+prev-tab=null
+next-tab=null
+move-tab-left=null
+move-tab-right=null
+
 What is it?
 ===========
 

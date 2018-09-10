@@ -25,6 +25,8 @@
 #include <sys/types.h>
 #endif
 
+#include <wordexp.h>
+
 #ifdef HAVE_TIME_H
 #include <time.h>
 #endif
@@ -325,7 +327,7 @@ static GQuark  tabs_menu_action_quark = 0;
 
 
 
-static const GtkActionEntry action_entries[] =
+static GtkActionEntry action_entries[] =
 {
   { "file-menu", NULL, N_ ("_File"), NULL, NULL, NULL, },
     { "new-tab", "tab-new", N_ ("Open _Tab"), "<control><shift>t", N_ ("Open a new terminal tab"), G_CALLBACK (terminal_window_action_new_tab), },
@@ -431,7 +433,78 @@ terminal_window_class_init (TerminalWindowClass *klass)
   tabs_menu_action_quark = g_quark_from_static_string ("tabs-menu-item");
 }
 
+static const char* KEYBINDING_CONFIG_PATH = "~/.config/xfce4/terminal/keybindings.conf";
+static const char* KEYBINDING_SECTION_NAME = "keybindings";
 
+static void 
+terminal_window_init_actions(TerminalWindow *window, gboolean create_if_not_exists) 
+{
+  wordexp_t p;
+  char** w;
+  GKeyFile* config_file = g_key_file_new();
+  gsize i;
+  gchar* key_value;
+  GError* err = NULL;
+  
+G_GNUC_BEGIN_IGNORE_DEPRECATIONS
+
+  window->priv->action_group = gtk_action_group_new ("terminal-window");
+  gtk_action_group_set_translation_domain (window->priv->action_group,
+                                           GETTEXT_PACKAGE);
+  
+  if (wordexp(KEYBINDING_CONFIG_PATH, &p, WRDE_NOCMD) == 0) 
+  {
+    w = p.we_wordv;
+    if (g_key_file_load_from_file(config_file, w[0], G_KEY_FILE_NONE, &err)) 
+    {
+      if (g_key_file_has_group(config_file, KEYBINDING_SECTION_NAME))
+      {
+        for (i = 0 ; i < G_N_ELEMENTS (action_entries); i++)
+        {
+          if ((key_value = g_key_file_get_value(config_file, KEYBINDING_SECTION_NAME, 
+               action_entries[i].name, NULL)) == NULL)
+            continue;
+          if (strcasecmp(key_value, "null") == 0)
+            action_entries[i].accelerator = NULL;
+          else
+            action_entries[i].accelerator = key_value;
+        }
+      }
+      else
+      {
+        g_debug("Cannot find appropriate section in %s. (%s)", w[0], KEYBINDING_SECTION_NAME);
+      }
+    } 
+    else 
+    {
+      if ((err->code == G_FILE_ERROR_NOENT) && create_if_not_exists)
+      {
+        for (i = 0 ; i < G_N_ELEMENTS (action_entries); i++)
+        {
+          if (action_entries[i].accelerator == NULL)
+            g_key_file_set_string(config_file, KEYBINDING_SECTION_NAME, 
+                                   action_entries[i].name, "NULL");
+          else
+            g_key_file_set_string(config_file, KEYBINDING_SECTION_NAME, 
+                                   action_entries[i].name, action_entries[i].accelerator);
+        }
+        g_key_file_save_to_file(config_file, w[0], NULL);
+      }
+    }
+  } 
+  
+  gtk_action_group_add_actions (window->priv->action_group,
+                              action_entries,
+                              G_N_ELEMENTS (action_entries),
+                              GTK_WIDGET (window));
+  gtk_action_group_add_toggle_actions (window->priv->action_group,
+                                       toggle_action_entries,
+                                       G_N_ELEMENTS (toggle_action_entries),
+                                       GTK_WIDGET (window));
+  
+  wordfree(&p);
+G_GNUC_END_IGNORE_DEPRECATIONS
+}
 
 static void
 terminal_window_init (TerminalWindow *window)
@@ -462,18 +535,9 @@ terminal_window_init (TerminalWindow *window)
   gtk_widget_set_app_paintable (GTK_WIDGET (window), TRUE);
 
 G_GNUC_BEGIN_IGNORE_DEPRECATIONS
-  window->priv->action_group = gtk_action_group_new ("terminal-window");
-  gtk_action_group_set_translation_domain (window->priv->action_group,
-                                           GETTEXT_PACKAGE);
-  gtk_action_group_add_actions (window->priv->action_group,
-                                action_entries,
-                                G_N_ELEMENTS (action_entries),
-                                GTK_WIDGET (window));
-  gtk_action_group_add_toggle_actions (window->priv->action_group,
-                                       toggle_action_entries,
-                                       G_N_ELEMENTS (toggle_action_entries),
-                                       GTK_WIDGET (window));
-
+  terminal_window_init_actions(window, TRUE);
+  
+  
   window->priv->ui_manager = gtk_ui_manager_new ();
   gtk_ui_manager_insert_action_group (window->priv->ui_manager, window->priv->action_group, 0);
 #if VTE_CHECK_VERSION (0, 49, 2)
