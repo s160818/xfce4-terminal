@@ -53,6 +53,8 @@
 #include <terminal/terminal-widget.h>
 #include <terminal/terminal-window.h>
 
+#include <terminal/process-info.h>
+
 #if defined(GDK_WINDOWING_X11)
 #include <gdk/gdkx.h>
 #endif
@@ -130,7 +132,6 @@ static void       terminal_screen_update_scrolling_lines        (TerminalScreen 
 static void       terminal_screen_update_scrolling_on_output    (TerminalScreen        *screen);
 static void       terminal_screen_update_scrolling_on_keystroke (TerminalScreen        *screen);
 static void       terminal_screen_update_text_blink_mode        (TerminalScreen        *screen);
-static void       terminal_screen_update_title                  (TerminalScreen        *screen);
 static void       terminal_screen_update_word_chars             (TerminalScreen        *screen);
 static void       terminal_screen_vte_child_exited              (VteTerminal           *terminal,
                                                                  gint                   status,
@@ -166,6 +167,8 @@ struct _TerminalScreenClass
 {
   GtkOverlayClass parent_class;
 };
+
+
 
 struct _TerminalScreen
 {
@@ -384,8 +387,6 @@ terminal_screen_finalize (GObject *object)
   (*G_OBJECT_CLASS (terminal_screen_parent_class)->finalize) (object);
 }
 
-
-
 static void
 terminal_screen_get_property (GObject    *object,
                               guint       prop_id,
@@ -443,7 +444,6 @@ terminal_screen_get_property (GObject    *object,
             title = _("Untitled");
 
           g_value_set_string (value, title);
-
           g_free (parsed_title);
         }
       break;
@@ -756,6 +756,9 @@ terminal_screen_parse_title (TerminalScreen *screen,
   const gchar *directory = NULL;
   gchar       *base_name;
   const gchar *vte_title;
+  process_info_t process_info = {.name = NULL };
+  gchar*         short_proc_name;
+  int            fgpid;
 
   terminal_return_val_if_fail (TERMINAL_IS_SCREEN (screen), NULL);
 
@@ -764,7 +767,6 @@ terminal_screen_parse_title (TerminalScreen *screen,
 
   string = g_string_new (NULL);
   remainder = title;
-
   /* walk from % character to % character */
   for (;;)
     {
@@ -809,7 +811,25 @@ terminal_screen_parse_title (TerminalScreen *screen,
                 }
             }
           break;
-
+        
+        case 'n':
+        case 'N':
+          fgpid = terminal_screen_get_foreground_process(screen);
+          if (fgpid < 0) fgpid = screen->pid;
+          if (fgpid >= 0) {
+            if (process_info.name == NULL) {
+              process_info_read_process_info(fgpid, &process_info, TRUE);
+            }
+            if (*remainder == 'N')
+              g_string_append(string, process_info.name);
+            else {
+              short_proc_name = g_path_get_basename(process_info.name);
+              g_string_append(string, short_proc_name);
+              g_free(short_proc_name);
+            }
+          }
+          break;
+        
         case 'w':
           /* window title from vte */
           vte_title = vte_terminal_get_window_title (VTE_TERMINAL (screen->terminal));
@@ -825,7 +845,8 @@ terminal_screen_parse_title (TerminalScreen *screen,
 
       remainder++;
     }
-
+  
+  g_free(process_info.name);
   return g_string_free (string, FALSE);
 }
 
@@ -1289,12 +1310,11 @@ terminal_screen_update_text_blink_mode (TerminalScreen *screen)
 
 
 
-static void
+void
 terminal_screen_update_title (TerminalScreen *screen)
 {
   g_object_notify (G_OBJECT (screen), "title");
 }
-
 
 
 static void
@@ -2786,29 +2806,36 @@ terminal_screen_save_contents (TerminalScreen *screen,
 gboolean
 terminal_screen_has_foreground_process (TerminalScreen *screen)
 {
-  VtePty *pty;
-  int     fd;
-  int     fgpid;
-
-  if (screen == NULL || screen->pid == -1)
-    return FALSE;
-
-  pty = vte_terminal_get_pty (VTE_TERMINAL (screen->terminal));
-  if (pty == NULL)
-    return FALSE;
-
-  fd = vte_pty_get_fd (pty);
-  if (fd == -1)
-    return FALSE;
-
-  fgpid = tcgetpgrp (fd);
+  int fgpid = terminal_screen_get_foreground_process (screen);
   if (fgpid == -1 || fgpid == screen->pid)
     return FALSE;
 
   return TRUE;
 }
 
+int terminal_screen_get_foreground_process(TerminalScreen *screen)
+{
+  VtePty *pty;
+  int     fd;
+  int     fgpid;
 
+  if (screen == NULL || screen->pid == -1)
+    return -1;
+
+  pty = vte_terminal_get_pty (VTE_TERMINAL (screen->terminal));
+  if (pty == NULL)
+    return -1;
+
+  fd = vte_pty_get_fd (pty);
+  if (fd == -1)
+    return -1;
+
+  fgpid = tcgetpgrp (fd);
+  if (fgpid == -1 || fgpid == screen->pid)
+    return -1;
+
+  return fgpid;
+}
 
 void
 terminal_screen_feed_text (TerminalScreen *screen,

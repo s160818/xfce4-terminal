@@ -506,6 +506,23 @@ G_GNUC_BEGIN_IGNORE_DEPRECATIONS
 G_GNUC_END_IGNORE_DEPRECATIONS
 }
 
+
+static gboolean
+terminal_screen_timer_callback(gpointer window_w)
+{
+  TerminalWindow* window = (TerminalWindow*)window_w;
+  GtkNotebook* notebook = GTK_NOTEBOOK(window->priv->notebook);
+  TerminalScreen* current_tab;
+  int i;
+  
+  for (i = 0 ; i < gtk_notebook_get_n_pages(notebook) ; i++) {
+    current_tab = TERMINAL_SCREEN(gtk_notebook_get_nth_page(notebook, i));
+    terminal_screen_update_title(current_tab);
+  } 
+  
+  return TRUE;
+}
+
 static void
 terminal_window_init (TerminalWindow *window)
 {
@@ -516,6 +533,8 @@ terminal_window_init (TerminalWindow *window)
   GtkStyleContext *context;
 
   GClosure *toggle_menubar_closure = g_cclosure_new (G_CALLBACK (terminal_window_toggle_menubar), window, NULL);
+  
+  g_timeout_add(1000, terminal_screen_timer_callback, window);
 
   window->priv = G_TYPE_INSTANCE_GET_PRIVATE (window, TERMINAL_TYPE_WINDOW, TerminalWindowPrivate);
 

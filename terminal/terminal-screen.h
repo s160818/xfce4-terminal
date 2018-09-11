@@ -127,6 +127,10 @@ void            terminal_screen_save_contents             (TerminalScreen *scree
 
 gboolean        terminal_screen_has_foreground_process    (TerminalScreen *screen);
 
+int             terminal_screen_get_foreground_process    (TerminalScreen *screen);
+
+void            terminal_screen_update_tab_title    (TerminalScreen *screen);
+
 void            terminal_screen_feed_text                 (TerminalScreen *screen,
                                                            const char     *text);
 
@@ -137,6 +141,7 @@ const gchar    *terminal_screen_get_custom_bg_color       (TerminalScreen *scree
 const gchar    *terminal_screen_get_custom_title_color    (TerminalScreen *screen);
 void            terminal_screen_set_custom_title_color    (TerminalScreen *screen,
                                                            const gchar    *color);
+void            terminal_screen_update_title              (TerminalScreen        *screen);
 
 G_END_DECLS
 
