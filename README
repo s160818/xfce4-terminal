@@ -18,6 +18,9 @@ next-tab=null
 move-tab-left=null
 move-tab-right=null
 
+Also, this fork extends default specifier list for tab titles (like %d, %D or %w) 
+and adds specifier %n and %N which replaced with current foreground process name (like in KDE konsole application).
+
 What is it?
 ===========
 
